@@ -256,10 +256,10 @@ async def emergency_on(request: ChannelRequest):
 
 @router.post("/measure_height/")
 async def measure_height(request: ChannelRequest):
-    await sio.emit("subscribe", request.channel)
-    await sio.emit("publish", {"channel": f"{request.channel}-cmd", "message": {"type": "command", "vital-sign": "height"}})
+    await sio_connect.emit("subscribe", request.channel)
+    await sio_connect.emit("publish", {"channel": f"{request.channel}-cmd", "message": {"type": "command", "vital-sign": "height"}})
     try:
-        event = await sio.receive(timeout=60)
+        event = await sio_connect.receive(timeout=60)
     except:
         return {"error": "Sensor timeout"}
     if check_errors(event):
@@ -268,9 +268,9 @@ async def measure_height(request: ChannelRequest):
 
 @router.post("/measure_weight/")
 async def measure_weight(request: ChannelRequest):
-    await sio.emit("subscribe", request.channel)
+    await sio_connect.emit("subscribe", request.channel)
     data = {"message": {"type": "command", "vital-sign": "weight"}}
-    task = await sio.call("command", data=data, to=f"{request.channel}-cmd", timeout=60)
+    task = await sio_connect.call("command", data=data, to=f"{request.channel}-cmd", timeout=60)
     print(task)
     # except Exception as e:
     #     return {"error": "Sensor timeout", "exception": str(e)}
@@ -281,10 +281,10 @@ async def measure_weight(request: ChannelRequest):
 
 @router.post("/measure_temperature/")
 async def measure_temperature(request: ChannelRequest):
-    await sio.emit("subscribe", request.channel)
-    await sio.emit("publish", {"channel": f"{request.channel}-cmd", "message": {"type": "command", "vital-sign": "temperature"}})
+    await sio_connect.emit("subscribe", request.channel)
+    await sio_connect.emit("publish", {"channel": f"{request.channel}-cmd", "message": {"type": "command", "vital-sign": "temperature"}})
     try:
-        event = await sio.receive(timeout=60)
+        event = await sio_connect.receive(timeout=60)
     except:
         return {"error": "Sensor timeout"}
     if check_errors(event):
@@ -293,8 +293,8 @@ async def measure_temperature(request: ChannelRequest):
 
 @router.post("/measure_oximetry/")
 async def measure_oximetry(request: ChannelRequest):
-    await sio.emit("subscribe", request.channel)
-    await sio.emit("publish", {"channel": f"{request.channel}-cmd", "message": {"type": "command", "vital-sign": "oxygen"}})
+    await sio_connect.emit("subscribe", request.channel)
+    await sio_connect.emit("publish", {"channel": f"{request.channel}-cmd", "message": {"type": "command", "vital-sign": "oxygen"}})
     try:
         event1 = await sio.receive(timeout=60)
         event2 = await sio.receive(timeout=10)
@@ -314,11 +314,11 @@ async def measure_oximetry(request: ChannelRequest):
 
 @router.post("/measure_blood_pressure/")
 async def measure_blood_pressure(request: ChannelRequest):
-    await sio.emit("subscribe", request.channel)
-    await sio.emit("publish", {"channel": f"{request.channel}-cmd", "message": {"type": "command", "vital-sign": "esfigmo"}})
+    await sio_connect.emit("subscribe", request.channel)
+    await sio_connect.emit("publish", {"channel": f"{request.channel}-cmd", "message": {"type": "command", "vital-sign": "esfigmo"}})
     try:
-        event1 = await sio.receive(timeout=60)
-        event2 = await sio.receive(timeout=10)
+        event1 = await sio_connect.receive(timeout=60)
+        event2 = await sio_connect.receive(timeout=10)
     except:
         return {"error": "Sensor timeout"}
     data = {"systolic": 0, "diastolic": 0}
@@ -335,10 +335,10 @@ async def measure_blood_pressure(request: ChannelRequest):
 
 @router.post("/activate_stethoscope/")
 async def activate_stethoscope(request: ChannelRequest):
-    await sio.emit("subscribe", request.channel)
-    await sio.emit("publish", {"channel": f"{request.channel}-cmd", "message": {"type": "command", "vital-sign": "mic"}})
+    await sio_connect.emit("subscribe", request.channel)
+    await sio_connect.emit("publish", {"channel": f"{request.channel}-cmd", "message": {"type": "command", "vital-sign": "mic"}})
     try:
-        event = await sio.receive(timeout=60)
+        event = await sio_connect.receive(timeout=60)
     except:
         return {"error": "Sensor timeout"}
     if check_errors(event):
@@ -349,10 +349,10 @@ async def activate_stethoscope(request: ChannelRequest):
 
 @router.post("/deactivate_stethoscope/")
 async def deactivate_stethoscope(request: ChannelRequest):
-    await sio.emit("subscribe", request.channel)
-    await sio.emit("publish", {"channel": f"{request.channel}-cmd", "message": {"type": "command", "vital-sign": "mic"}})
+    await sio_connect.emit("subscribe", request.channel)
+    await sio_connect.emit("publish", {"channel": f"{request.channel}-cmd", "message": {"type": "command", "vital-sign": "mic"}})
     try:
-        event = await sio.receive(timeout=60)
+        event = await sio_connect.receive(timeout=60)
     except:
         return {"error": "Sensor timeout"}
     if check_errors(event):
@@ -363,10 +363,10 @@ async def deactivate_stethoscope(request: ChannelRequest):
 
 @router.post("/record_stethoscope/")
 async def record_stethoscope(request: ChannelRequest):
-    await sio.emit("subscribe", request.channel)
-    await sio.emit("publish", {"channel": f"{request.channel}-cmd", "message": {"type": "command", "vital-sign": "esteto"}})
+    await sio_connect.emit("subscribe", request.channel)
+    await sio_connect.emit("publish", {"channel": f"{request.channel}-cmd", "message": {"type": "command", "vital-sign": "esteto"}})
     try:
-        event = await sio.receive(timeout=60)
+        event = await sio_connect.receive(timeout=60)
     except:
         return {"error": "Sensor timeout"}
     if check_errors(event):

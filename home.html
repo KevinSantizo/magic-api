@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<meta http-equiv="X-UA-Compatible" content="ie=edge" />
+<title>Document</title>
+</head>
+<body>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.0.0/socket.io.min.js"></script>
+<script>
+
+    var message = ''
+
+    const socket = io("http://localhost:8443", {
+        path: '/socket.io',
+        transports: ['websocket']
+    });
+
+    socket.on('connect', () => {
+        console.log('Connected to server');
+    });
+
+    socket.emit('subscribe', 'test-channel');
+
+    socket.on('message', (data) => {
+        console.log('Received message:', data);
+        document.getElementById("demo").innerHTML = data['message'];  
+    });
+
+    socket.on('disconnect', () => {
+        console.log('Disconnected from server');
+    });
+
+    function publish(){
+        socket.emit("publish", {
+            channel: 'test-channel',
+            message: 'Hola',
+        });
+    }
+
+</script>
+
+<h2>Test socket</h2>
+<label for="fname">First name:</label><br>
+  <input type="text" id="user1" name="user1"><br>
+  <label for="lname">Last name:</label><br>
+  <input type="text" id="lname" name="lname" value="Doe"><br><br>
+
+  <label id="demo" for="lname" style="margin-bottom: 25px;"></label><br>
+
+
+  <button style="margin-top: 25px;" onclick="publish()" type="button">Click Me!</button>
+</body>
+</html>

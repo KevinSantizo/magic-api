@@ -282,10 +282,10 @@ async def measure_weight(request: ChannelRequest):
 
 @router.post("/measure_temperature/")
 async def measure_temperature(request: ChannelRequest):
-    await sio_connect.emit("subscribe", request.channel)
-    await sio_connect.emit("publish", {"channel": f"{request.channel}-cmd", "message": {"type": "command", "vital-sign": "temperature"}})
+    sio_connect.emit("subscribe", request.channel)
+    sio_connect.emit("publish", {"channel": f"{request.channel}-cmd", "message": {"type": "command", "vital-sign": "temperature"}})
     try:
-        event = await sio_connect.receive(timeout=3)
+        event = sio_connect.receive(timeout=3)
     except:
         return {"error": "Sensor unavailable"}
     if check_errors(event):

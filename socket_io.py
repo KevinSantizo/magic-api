@@ -294,11 +294,11 @@ async def measure_temperature(request: ChannelRequest):
 
 @router.post("/measure_oximetry/")
 async def measure_oximetry(request: ChannelRequest):
-    await sio_connect.emit("subscribe", request.channel)
-    await sio_connect.emit("publish", {"channel": f"{request.channel}-cmd", "message": {"type": "command", "vital-sign": "oxygen"}})
+    sio_connect.emit("subscribe", request.channel)
+    sio_connect.emit("publish", {"channel": f"{request.channel}-cmd", "message": {"type": "command", "vital-sign": "oxygen"}})
     try:
-        event1 = await sio.receive(timeout=5)
-        event2 = await sio.receive(timeout=2)
+        event1 = sio.receive(timeout=5)
+        event2 = sio.receive(timeout=2)
     except:
         return {"error": "Sensor unavailable"}
     data = {"bpm": 0, "SpO2": 0}
@@ -315,11 +315,11 @@ async def measure_oximetry(request: ChannelRequest):
 
 @router.post("/measure_blood_pressure/")
 async def measure_blood_pressure(request: ChannelRequest):
-    await sio_connect.emit("subscribe", request.channel)
-    await sio_connect.emit("publish", {"channel": f"{request.channel}-cmd", "message": {"type": "command", "vital-sign": "esfigmo"}})
+    sio_connect.emit("subscribe", request.channel)
+    sio_connect.emit("publish", {"channel": f"{request.channel}-cmd", "message": {"type": "command", "vital-sign": "esfigmo"}})
     try:
-        event1 = await sio_connect.receive(timeout=5)
-        event2 = await sio_connect.receive(timeout=2)
+        event1 = sio_connect.receive(timeout=5)
+        event2 = sio_connect.receive(timeout=2)
     except:
         return {"error": "Sensor unavailable"}
     data = {"systolic": 0, "diastolic": 0}
@@ -336,10 +336,10 @@ async def measure_blood_pressure(request: ChannelRequest):
 
 @router.post("/activate_stethoscope/")
 async def activate_stethoscope(request: ChannelRequest):
-    await sio_connect.emit("subscribe", request.channel)
-    await sio_connect.emit("publish", {"channel": f"{request.channel}-cmd", "message": {"type": "command", "vital-sign": "mic"}})
+    sio_connect.emit("subscribe", request.channel)
+    sio_connect.emit("publish", {"channel": f"{request.channel}-cmd", "message": {"type": "command", "vital-sign": "mic"}})
     try:
-        event = await sio_connect.receive(timeout=3)
+        event = sio_connect.receive(timeout=3)
     except:
         return {"error": "Sensor unavailable"}
     if check_errors(event):
@@ -350,10 +350,10 @@ async def activate_stethoscope(request: ChannelRequest):
 
 @router.post("/deactivate_stethoscope/")
 async def deactivate_stethoscope(request: ChannelRequest):
-    await sio_connect.emit("subscribe", request.channel)
-    await sio_connect.emit("publish", {"channel": f"{request.channel}-cmd", "message": {"type": "command", "vital-sign": "mic"}})
+    sio_connect.emit("subscribe", request.channel)
+    sio_connect.emit("publish", {"channel": f"{request.channel}-cmd", "message": {"type": "command", "vital-sign": "mic"}})
     try:
-        event = await sio_connect.receive(timeout=2)
+        event = sio_connect.receive(timeout=2)
     except:
         return {"error": "Sensor unavailable"}
     if check_errors(event):
@@ -364,10 +364,10 @@ async def deactivate_stethoscope(request: ChannelRequest):
 
 @router.post("/record_stethoscope/")
 async def record_stethoscope(request: ChannelRequest):
-    await sio_connect.emit("subscribe", request.channel)
-    await sio_connect.emit("publish", {"channel": f"{request.channel}-cmd", "message": {"type": "command", "vital-sign": "esteto"}})
+    sio_connect.emit("subscribe", request.channel)
+    sio_connect.emit("publish", {"channel": f"{request.channel}-cmd", "message": {"type": "command", "vital-sign": "esteto"}})
     try:
-        event = await sio_connect.receive(timeout=2)
+        event = sio_connect.receive(timeout=2)
     except:
         return {"error": "Sensor unavailable"}
     if check_errors(event):

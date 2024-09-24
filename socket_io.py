@@ -1,9 +1,11 @@
-#Authentication imports
 import os
+from fastapi import FastAPI, Request, HTTPException
+from fastapi.responses import JSONResponse
 import requests
 import jwt
 from datetime import datetime, timedelta
 from typing import Dict, Any
+from api_service import ApiService
 
 #Socket imports 
 import json
@@ -27,7 +29,7 @@ class AuthorizationError(Exception):
     """Exception raised for errors in the authorization process."""
     pass
 
-def authorize(request: Dict[str, Any]) -> str:
+def authorize(request: Dict[str, Any]) -> str: 
     """
     Authorizes a user and returns a JWT token.
     
@@ -42,17 +44,18 @@ def authorize(request: Dict[str, Any]) -> str:
     """
     try:
         public_key = request['headers']['public_key']
-        secret_key = request['headers']['secret_key']
-        metadata = request['headers']['metadata']
+        secret_key = request['headers']['secret_key']  
     except KeyError:
         raise AuthorizationError('Missing required headers')
     try:
-        # DJANGO_URL = os.environ['DJANGO_URL']
-        # django_api = ApiService(DJANGO_URL)
-        # url = f'/api/users/authenticate/'
-        # response = django_api.get(url, headers={'public_key': public_key, 'secret_key': secret_key})
-        # data = response.json()
-        data = {'id': 14}
+        DJANGO_URL = 'http://127.0.0.1:8000/api/authenticate_key_pairs/'
+        django_api = ApiService(DJANGO_URL)
+        # data to be sent to api
+        data = {'public_key': public_key,
+                'secret_key': secret_key}
+
+        # sending post request and saving response as response object
+        r = requests.post(url=DJANGO_URL, data=data) 
     except KeyError:
         raise AuthenticationError('DJANGO_URL not found in environment variables')
     except requests.exceptions.RequestException as e:
@@ -63,8 +66,8 @@ def authorize(request: Dict[str, Any]) -> str:
     try:
         expiration = datetime.now() + timedelta(days=1)
         jwt_key = os.environ['JWT_KEY']
-        web_token = jwt.encode({'client_id': data['id'], 'metadata': metadata, 'exp': expiration}, jwt_key, algorithm='HS256')
-        return web_token
+        web_token = jwt.encode({'exp': expiration}, jwt_key, algorithm='HS256')
+        return JSONResponse({'jwt': web_token})
     except KeyError:
         raise AuthenticationError('JWT_KEY not found in environment variables')
     except Exception as e:
@@ -85,7 +88,7 @@ def verify(request: Dict[str, Any]) -> Dict[str, Any]:
         AuthorizationError: If authorization fails at any point.
     """
     try:
-        jwt_key = os.environ['JWT_KEY']
+        jwt_key = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJleHAiOjE3MjcyNzQ4Mzd9.QrJHBdB0qjlkNji6K4GGjcEWHapR-eHXYo8c9agFzEo'
     except KeyError:
         raise AuthorizationError('JWT_KEY not found in environment variables')
     try:
@@ -125,13 +128,26 @@ sio = socketio.AsyncServer(cors_allowed_origins='*', async_mode='asgi', ping_int
 
 # Envolver con la aplicación ASGI
 socket_app = socketio.ASGIApp(sio, other_asgi_app=app, socketio_path='/socket.io')
- 
+
 
 @app.get('/')
-async def read_root():
+async def read_root(request: Request):
     #Endpoint para verificar que el servidor está en funcionamiento.
+    try:
+        auth_data = verify({'headers': request.headers})
+        if not auth_data:
+            raise HTTPException(status_code=403, detail='Unauthorized')
+    except Exception as e:
+        raise HTTPException(status_code=403, detail=str(e))
     return {'message': 'Server is now running'}
 
+@app.get('/authenticate/')
+async def authenticate_view(request: Request):
+    #Endpoint para verificar la autenticación de un usuario.
+    try:
+        return authorize({"headers": request.headers})
+    except Exception as e:
+        raise HTTPException(status_code=401, detail=str(e))
 
 @sio.event
 async def connect(sid, environ, auth):
@@ -157,7 +173,7 @@ async def publish(sid, data, auth):
     """
     Event for handling message publishing. 
     """
-
+ 
     if not verify({'headers': auth}):
         raise ConnectionRefusedError('Authentication failed')
     sendable_message = data.get('message', '')
@@ -190,42 +206,62 @@ class ChannelRequest(BaseModel):
 
 
 # 
+
+sio_client = socketio.SimpleClient()
+
+def connect_sio():
+    #sio_client.connect('http://localhost:2096', auth={'Authorization': 'Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJjbGllbnRfaWQiOjE0LCJtZXRhZGF0YSI6Im1ldGFkYXRhIiwiZXhwIjoxNzE5MzM2NzcxfQ.RteX1uCkQU9wtUVaNcOHk-XFVzWFx3tWth2YjCT015M'})
+    sio_client.connect('https://socketio.bitmec.com:2096', auth={'Authorization': 'Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJjbGllbnRfaWQiOjE0LCJtZXRhZGF0YSI6Im1ldGFkYXRhIiwiZXhwIjoxNzE5MzM2NzcxfQ.RteX1uCkQU9wtUVaNcOHk-XFVzWFx3tWth2YjCT015M'})
+
+connect_sio()
+
 @router.post('/control/')
-async def control(request: ChannelRequest): 
-    await sio.emit('subscribe', request.channel)
+def control(request: ChannelRequest): 
+    sio_client.emit('subscribe', request.channel)
     match request.command:
         case 'exit': 
-            await sio.emit('publish', {"channel": f"{request.channel}-cmd", "message": {"type": "navigation", "screen": "end-screen"}})
-            await sio.emit('publish', {"channel": f"{request.channel}", "message": {"type": "navigation", "screen": "end-screen"}})
-            await sio.emit('publish', {"channel": f"{request.channel}-cmd", "message": {"type": "command", "vital-sign": "close"}})
-        
+            sio_client.emit('publish', {"channel": f"{request.channel}-cmd", "message": {"type": "navigation", "screen": "end-screen"}})
+            sio_client.emit('publish', {"channel": f"{request.channel}", "message": {"type": "navigation", "screen": "end-screen"}})
+            sio_client.emit('publish', {"channel": f"{request.channel}-cmd", "message": {"type": "command", "vital-sign": "close"}})
+            
+            #await sio.emit('publish', {"channel": f"{request.channel}-cmd", "message": {"type": "navigation", "screen": "end-screen"}})
+            #await sio.emit('publish', {"channel": f"{request.channel}", "message": {"type": "navigation", "screen": "end-screen"}})
+            #await sio.emit('publish', {"channel": f"{request.channel}-cmd", "message": {"type": "command", "vital-sign": "close"}})
+   
         case 'call_min':
-            await sio.emit('publish', {"channel": f"{request.channel}-cmd", "message": {"type": "action", "vital-sign": "vol-"}})
-            await sio.emit('publish', {"channel": f"{request.channel}", "message": {"type": "action", "vital-sign": "vol-"}})
-        
+            # await sio.emit('publish', {"channel": f"{request.channel}-cmd", "message": {"type": "action", "vital-sign": "vol-"}})
+            # await sio.emit('publish', {"channel": f"{request.channel}", "message": {"type": "action", "vital-sign": "vol-"}})
+            sio_client.emit('publish', {"channel": f"{request.channel}-cmd", "message": {"type": "action", "vital-sign": "vol-"}})
+            sio_client.emit('publish', {"channel": f"{request.channel}", "message": {"type": "action", "vital-sign": "vol-"}})
+            
         case 'call_up':
-            await sio.emit('publish', {"channel": f"{request.channel}-cmd", "message": {"type": "action", "vital-sign": "vol+"}})
-            await sio.emit('publish', {"channel": f"{request.channel}", "message": {"type": "action", "vital-sign": "vol+"}})
-        
+            #await sio.emit('publish', {"channel": f"{request.channel}-cmd", "message": {"type": "action", "vital-sign": "vol+"}})
+            #await sio.emit('publish', {"channel": f"{request.channel}", "message": {"type": "action", "vital-sign": "vol+"}})
+            sio_client.emit('publish', {"channel": f"{request.channel}-cmd", "message": {"type": "action", "vital-sign": "vol+"}})
+            sio_client.emit('publish', {"channel": f"{request.channel}", "message": {"type": "action", "vital-sign": "vol+"}})
         case 'call_mute':
-            await sio.emit('publish', {"channel": f"{request.channel}-cmd", "message": {"type": "action", "vital-sign": "mute"}})
-            await sio.emit('publish', {"channel": f"{request.channel}", "message": {"type": "action", "vital-sign": "mute"}})
-
+            #await sio.emit('publish', {"channel": f"{request.channel}-cmd", "message": {"type": "action", "vital-sign": "mute"}})
+            #await sio.emit('publish', {"channel": f"{request.channel}", "message": {"type": "action", "vital-sign": "mute"}})
+            sio_client.emit('publish', {"channel": f"{request.channel}-cmd", "message": {"type": "action", "vital-sign": "mute"}})
+            sio_client.emit('publish', {"channel": f"{request.channel}", "message": {"type": "action", "vital-sign": "mute"}})
         case 'call_unmute':
-            await sio.emit('publish', {"channel": f"{request.channel}-cmd", "message": {"type": "action", "vital-sign": "unmute"}})
-            await sio.emit('publish', {"channel": f"{request.channel}", "message": {"type": "action", "vital-sign": "unmute"}})
-        
+            #await sio.emit('publish', {"channel": f"{request.channel}-cmd", "message": {"type": "action", "vital-sign": "unmute"}})
+            #await sio.emit('publish', {"channel": f"{request.channel}", "message": {"type": "action", "vital-sign": "unmute"}})
+            sio_client.emit('publish', {"channel": f"{request.channel}-cmd", "message": {"type": "action", "vital-sign": "unmute"}})
+            sio_client.emit('publish', {"channel": f"{request.channel}", "message": {"type": "action", "vital-sign": "unmute"}})
         case 'emergency_on':
-            await sio.emit('publish', {"channel": f"{request.channel}-cmd", "message": {"type": "command", "vital-sign": "e-stop"}})
-            await sio.emit('publish', {"channel": f"{request.channel}", "message": {"type": "command", "vital-sign": "e-stop"}})
-        
+            #await sio.emit('publish', {"channel": f"{request.channel}-cmd", "message": {"type": "command", "vital-sign": "e-stop"}})
+            #await sio.emit('publish', {"channel": f"{request.channel}", "message": {"type": "command", "vital-sign": "e-stop"}})
+            sio_client.emit('publish', {"channel": f"{request.channel}-cmd", "message": {"type": "command", "vital-sign": "e-stop"}})
+            sio_client.emit('publish', {"channel": f"{request.channel}", "message": {"type": "command", "vital-sign": "e-stop"}})
         case 'emergency_off':
-            await sio.emit('publish', {"channel": f"{request.channel}-cmd", "message": {"type": "command", "vital-sign": "N-e-stop"}})
-            await sio.emit('publish', {"channel": f"{request.channel}", "message": {"type": "command", "vital-sign": "N-e-stop"}})
-        
+            #await sio.emit('publish', {"channel": f"{request.channel}-cmd", "message": {"type": "command", "vital-sign": "N-e-stop"}})
+            #await sio.emit('publish', {"channel": f"{request.channel}", "message": {"type": "command", "vital-sign": "N-e-stop"}})
+            sio_client.emit('publish', {"channel": f"{request.channel}-cmd", "message": {"type": "command", "vital-sign": "N-e-stop"}})
+            sio_client.emit('publish', {"channel": f"{request.channel}", "message": {"type": "command", "vital-sign": "N-e-stop"}})
         case _:
             return {'error': 'command not recognized'}
-
+   
     return {'status': 'success'}
 
  
@@ -303,17 +339,8 @@ async def instruments(request: ChannelRequest):
                 elif e[1]['message']['vs'] == 'dias':
                     data['diastolic'] = e[1]['message']['valor']
             return data
-        
-        case _:
-            return {'error': 'command not recognized'}
- 
- 
- # Esteto
-@router.post("/stetho/")
-async def stetho(request: ChannelRequest):
-    await sio.emit("subscribe", request.channel)
-    match request.command:
-        case 'activate': 
+
+        case 'activate_stetho':  
             await sio.emit("publish", {"channel": f"{request.channel}-cmd", "message": {"type": "command", "vital-sign": "mic"}})
             try:
                 event = await sio.receive(timeout=3)
@@ -324,8 +351,8 @@ async def stetho(request: ChannelRequest):
             if "type" in event[1]['message'] and event[1]['message']['type'] == 'alarm' and event[1]['message']['mic'] == "cámara":
                 return {"message": "Stethoscope activated"}
             return {"error": "Stethoscope not activated"}
-
-        case 'deactivate':
+        
+        case 'deactivate_stetho': 
             await sio.emit("publish", {"channel": f"{request.channel}-cmd", "message": {"type": "command", "vital-sign": "mic"}})
             try:
                 event = await sio.receive(timeout=2)
@@ -336,7 +363,7 @@ async def stetho(request: ChannelRequest):
             if "type" in event[1]['message'] and event[1]['message']['type'] == 'alarm' and event[1]['message']['mic'] == "cámara":
                 return {"message": "Stethoscope deactivated"}
             return {"error": "Stethoscope not deactivated"}
-
+        
         case 'record':
             await sio.emit("publish", {"channel": f"{request.channel}-cmd", "message": {"type": "command", "vital-sign": "esteto"}})
             try:
@@ -348,6 +375,7 @@ async def stetho(request: ChannelRequest):
             if "type" in event[1]['message'] and event[1]['message']['type'] == 'alarm' and event[1]['message']['esteto'] == "done":
                 return {"message": "Stethoscope audio recorded"}
             return {"error": "Stethoscope audio not recorded"}
+
         
         case _:
             return {'error': 'command not recognized'}

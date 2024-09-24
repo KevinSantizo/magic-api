@@ -120,17 +120,17 @@ app.add_middleware(
 
 
 # Crear un servidor Socket.IO con CORS permitido para todos los orígenes
-sio = socketio.AsyncServer(cors_allowed_origins='*', async_mode='asgi')
+sio = socketio.AsyncServer(cors_allowed_origins='*', async_mode='asgi', ping_interval=3, ping_timeout=3)
 
 
 # Envolver con la aplicación ASGI
 socket_app = socketio.ASGIApp(sio, other_asgi_app=app, socketio_path='/socket.io')
-
+ 
 
 @app.get('/')
 async def read_root():
     #Endpoint para verificar que el servidor está en funcionamiento.
-    return {'message': 'Server is running'}
+    return {'message': 'Server is now running'}
 
 
 @sio.event
@@ -183,199 +183,174 @@ def check_errors(event):
         return True
     return False
 
-sio_connect = socketio.SimpleClient()
-
-def connect_sio():
-    sio_connect.connect('https://socketio.bitmec.com:2096', auth={'Authorization': 'Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJjbGllbnRfaWQiOjE0LCJtZXRhZGF0YSI6Im1ldGFkYXRhIiwiZXhwIjoxNzE5MzM2NzcxfQ.RteX1uCkQU9wtUVaNcOHk-XFVzWFx3tWth2YjCT015M'})
  
-connect_sio()
-
 class ChannelRequest(BaseModel):
     channel: str
+    command: str
 
-@router.post('/patient_exit/')
-async def patient_exit(request: ChannelRequest): 
-    sio_connect.emit('subscribe', request.channel)
-    sio_connect.emit('publish', {"channel": f"{request.channel}-cmd", "message": {"type": "navigation", "screen": "end-screen"}})
-    sio_connect.emit('publish', {"channel": f"{request.channel}", "message": {"type": "navigation", "screen": "end-screen"}})
-    sio_connect.emit('publish', {"channel": f"{request.channel}-cmd", "message": {"type": "command", "vital-sign": "close"}})
+
+# 
+@router.post('/control/')
+async def control(request: ChannelRequest): 
+    await sio.emit('subscribe', request.channel)
+    match request.command:
+        case 'exit': 
+            await sio.emit('publish', {"channel": f"{request.channel}-cmd", "message": {"type": "navigation", "screen": "end-screen"}})
+            await sio.emit('publish', {"channel": f"{request.channel}", "message": {"type": "navigation", "screen": "end-screen"}})
+            await sio.emit('publish', {"channel": f"{request.channel}-cmd", "message": {"type": "command", "vital-sign": "close"}})
+        
+        case 'call_min':
+            await sio.emit('publish', {"channel": f"{request.channel}-cmd", "message": {"type": "action", "vital-sign": "vol-"}})
+            await sio.emit('publish', {"channel": f"{request.channel}", "message": {"type": "action", "vital-sign": "vol-"}})
+        
+        case 'call_up':
+            await sio.emit('publish', {"channel": f"{request.channel}-cmd", "message": {"type": "action", "vital-sign": "vol+"}})
+            await sio.emit('publish', {"channel": f"{request.channel}", "message": {"type": "action", "vital-sign": "vol+"}})
+        
+        case 'call_mute':
+            await sio.emit('publish', {"channel": f"{request.channel}-cmd", "message": {"type": "action", "vital-sign": "mute"}})
+            await sio.emit('publish', {"channel": f"{request.channel}", "message": {"type": "action", "vital-sign": "mute"}})
+
+        case 'call_unmute':
+            await sio.emit('publish', {"channel": f"{request.channel}-cmd", "message": {"type": "action", "vital-sign": "unmute"}})
+            await sio.emit('publish', {"channel": f"{request.channel}", "message": {"type": "action", "vital-sign": "unmute"}})
+        
+        case 'emergency_on':
+            await sio.emit('publish', {"channel": f"{request.channel}-cmd", "message": {"type": "command", "vital-sign": "e-stop"}})
+            await sio.emit('publish', {"channel": f"{request.channel}", "message": {"type": "command", "vital-sign": "e-stop"}})
+        
+        case 'emergency_off':
+            await sio.emit('publish', {"channel": f"{request.channel}-cmd", "message": {"type": "command", "vital-sign": "N-e-stop"}})
+            await sio.emit('publish', {"channel": f"{request.channel}", "message": {"type": "command", "vital-sign": "N-e-stop"}})
+        
+        case _:
+            return {'error': 'command not recognized'}
 
     return {'status': 'success'}
 
-@router.post('/call_min/')
-async def call_min(request: ChannelRequest): 
-    sio_connect.emit('subscribe', request.channel)
-    sio_connect.emit('publish', {"channel": f"{request.channel}-cmd", "message": {"type": "action", "vital-sign": "vol-"}})
-    sio_connect.emit('publish', {"channel": f"{request.channel}", "message": {"type": "action", "vital-sign": "vol-"}})
  
-    return {'status': 'success'} 
-
-@router.post('/call_up/')
-async def call_up(request: ChannelRequest): 
-    sio_connect.emit('subscribe', request.channel)
-    sio_connect.emit('publish', {"channel": f"{request.channel}-cmd", "message": {"type": "action", "vital-sign": "vol+"}})
-    sio_connect.emit('publish', {"channel": f"{request.channel}", "message": {"type": "action", "vital-sign": "vol+"}})
- 
-    return {'status': 'success'}
-
-
-@router.post('/call_mute/')
-async def call_mute(request: ChannelRequest): 
-    sio_connect.emit('subscribe', request.channel)
-    sio_connect.emit('publish', {"channel": f"{request.channel}-cmd", "message": {"type": "action", "vital-sign": "mute"}})
-    sio_connect.emit('publish', {"channel": f"{request.channel}", "message": {"type": "action", "vital-sign": "mute"}})
- 
-    return {'status': 'success'}
-
-@router.post('/call_unmute/')
-async def call_unmute(request: ChannelRequest): 
-    sio_connect.emit('subscribe', request.channel)
-    sio_connect.emit('publish', {"channel": f"{request.channel}-cmd", "message": {"type": "action", "vital-sign": "unmute"}})
-    sio_connect.emit('publish', {"channel": f"{request.channel}", "message": {"type": "action", "vital-sign": "unmute"}})
- 
-    return {'status': 'success'} 
-
-@router.post('/emergency_on/')
-async def emergency_on(request: ChannelRequest): 
-    sio_connect.emit('subscribe', request.channel)
-    sio_connect.emit('publish', {"channel": f"{request.channel}-cmd", "message": {"type": "command", "vital-sign": "e-stop"}})
-    sio_connect.emit('publish', {"channel": f"{request.channel}", "message": {"type": "command", "vital-sign": "e-stop"}})
- 
-    return {'status': 'success'} 
-
-@router.post('/emergency_off/')
-async def emergency_on(request: ChannelRequest): 
-    sio_connect.emit('subscribe', request.channel)
-    sio_connect.emit('publish', {"channel": f"{request.channel}-cmd", "message": {"type": "command", "vital-sign": "N-e-stop"}})
-    sio_connect.emit('publish', {"channel": f"{request.channel}", "message": {"type": "command", "vital-sign": "N-e-stop"}})
- 
-    return {'status': 'success'} 
-
 
 # Vital Signs 
 
-@router.post("/measure_height/")
-def measure_height(request: ChannelRequest):
-    sio_connect.emit("subscribe", request.channel)
-    sio_connect.emit("publish", {"channel": f"{request.channel}-cmd", "message": {"type": "command", "vital-sign": "height"}})
+@router.post("/instruments/")
+async def instruments(request: ChannelRequest): 
+    await sio.emit("subscribe", request.channel)
+    match request.command:
+        case 'height':  
+            await sio.emit("publish", {"channel": f"{request.channel}-cmd", "message": {"type": "command", "vital-sign": "height"}}) 
+            try:
+                event = await sio.receive(timeout=3) 
+            except: 
+                return {"sensor": "Sensor unavailable"}
+            if check_errors(event):
+                return {"error": event[1]['sensor']}
+            return {"height": event[1]['message']['valor']}
+
+        case 'weight':  
+            await sio.emit("publish", {"channel": f"{request.channel}-cmd", "message": {"type": "command", "vital-sign": "weight"}}) 
+            try:
+                event = await sio.receive(timeout=3) 
+            except: 
+                return {"sensor": "Sensor unavailable"}
+            if check_errors(event):
+                return {"error": event[1]['sensor']}
+            return {"weight": event[1]['message']['valor']}
+
+        case 'temperature':  
+            await sio.emit("publish", {"channel": f"{request.channel}-cmd", "message": {"type": "command", "vital-sign": "temperature"}}) 
+            try:
+                event = await sio.receive(timeout=3) 
+            except: 
+                return {"sensor": "Sensor unavailable"}
+            if check_errors(event):
+                return {"error": event[1]['sensor']}
+            return {"temperature": event[1]['message']['valor']}
+        
+        case 'oximetry':  
+            await sio.emit("publish", {"channel": f"{request.channel}-cmd", "message": {"type": "command", "vital-sign": "oxygen"}}) 
+            try:
+                event1 = await sio.receive(timeout=5)
+                event2 = await sio.receive(timeout=2)
+            except:
+                return {"error": "Sensor unavailable"}
+            data = {"bpm": 0, "SpO2": 0}
+            if check_errors(event1):
+                return {"error": event1[1]['sensor']}
+            elif check_errors(event2):
+                return {"error": event2[1]['sensor']}
+            for e in [event1, event2]:
+                if e[1]['message']['vs'] == 'bpm':
+                    data['bpm'] = e[1]['message']['valor']
+                elif e[1]['message']['vs'] == 'SpO2':
+                    data['SpO2'] = e[1]['message']['valor']
+            return data
+        
+        case 'blood_pressure':  
+            await sio.emit("publish", {"channel": f"{request.channel}-cmd", "message": {"type": "command", "vital-sign": "blood_pressure"}}) 
+            try:
+                event1 = await sio.receive(timeout=5)
+                event2 = await sio.receive(timeout=2)
+            except:
+                return {"error": "Sensor unavailable"}
+            data = {"systolic": 0, "diastolic": 0}
+            if check_errors(event1):
+                return {"error": event1[1]['sensor']}
+            elif check_errors(event2):
+                return {"error": event2[1]['sensor']}
+            for e in [event1, event2]:
+                if e[1]['message']['vs'] == 'sis':
+                    data['systolic'] = e[1]['message']['valor']
+                elif e[1]['message']['vs'] == 'dias':
+                    data['diastolic'] = e[1]['message']['valor']
+            return data
+        
+        case _:
+            return {'error': 'command not recognized'}
  
-    try:
-        event = sio_connect.receive(timeout=3) 
-    except: 
-        return {"sensor": "Sensor unavailable"}
-    if check_errors(event):
-        return {"error": event[1]['sensor']}
-    return {"height": event[1]['message']['valor']} 
+ 
+ # Esteto
+@router.post("/stetho/")
+async def stetho(request: ChannelRequest):
+    await sio.emit("subscribe", request.channel)
+    match request.command:
+        case 'activate': 
+            await sio.emit("publish", {"channel": f"{request.channel}-cmd", "message": {"type": "command", "vital-sign": "mic"}})
+            try:
+                event = await sio.receive(timeout=3)
+            except:
+                return {"error": "Sensor unavailable"}
+            if check_errors(event):
+                return {"error": event[1]['sensor']}
+            if "type" in event[1]['message'] and event[1]['message']['type'] == 'alarm' and event[1]['message']['mic'] == "cámara":
+                return {"message": "Stethoscope activated"}
+            return {"error": "Stethoscope not activated"}
 
-@router.post("/measure_weight/")
-async def measure_weight(request: ChannelRequest):
-    sio_connect.emit("subscribe", request.channel) 
-    sio_connect.emit("publish", {"channel": f"{request.channel}-cmd", "message": {"type": "command", "vital-sign": "weight"}})
-  
-    try:
-        event = sio_connect.receive(timeout=3) 
-    except: 
-        return {"sensor": "Sensor unavailable"}
-    if check_errors(event):
-        return {"error": event[1]['sensor']}
-    return {"weight": event[1]['message']['valor']} 
+        case 'deactivate':
+            await sio.emit("publish", {"channel": f"{request.channel}-cmd", "message": {"type": "command", "vital-sign": "mic"}})
+            try:
+                event = await sio.receive(timeout=2)
+            except:
+                return {"error": "Sensor unavailable"}
+            if check_errors(event):
+                return {"error": event[1]['sensor']}
+            if "type" in event[1]['message'] and event[1]['message']['type'] == 'alarm' and event[1]['message']['mic'] == "cámara":
+                return {"message": "Stethoscope deactivated"}
+            return {"error": "Stethoscope not deactivated"}
 
-@router.post("/measure_temperature/")
-async def measure_temperature(request: ChannelRequest):
-    sio_connect.emit("subscribe", request.channel)
-    sio_connect.emit("publish", {"channel": f"{request.channel}-cmd", "message": {"type": "command", "vital-sign": "temperature"}})
-    try:
-        event = sio_connect.receive(timeout=3)
-    except:
-        return {"error": "Sensor unavailable"}
-    if check_errors(event):
-        return {"error": event[1]['sensor']}
-    return {"temperature": event[1]['message']['valor']}
-
-@router.post("/measure_oximetry/")
-async def measure_oximetry(request: ChannelRequest):
-    sio_connect.emit("subscribe", request.channel)
-    sio_connect.emit("publish", {"channel": f"{request.channel}-cmd", "message": {"type": "command", "vital-sign": "oxygen"}})
-    try:
-        event1 = sio.receive(timeout=5)
-        event2 = sio.receive(timeout=2)
-    except:
-        return {"error": "Sensor unavailable"}
-    data = {"bpm": 0, "SpO2": 0}
-    if check_errors(event1):
-        return {"error": event1[1]['sensor']}
-    elif check_errors(event2):
-        return {"error": event2[1]['sensor']}
-    for e in [event1, event2]:
-        if e[1]['message']['vs'] == 'bpm':
-            data['bpm'] = e[1]['message']['valor']
-        elif e[1]['message']['vs'] == 'SpO2':
-            data['SpO2'] = e[1]['message']['valor']
-    return data
-
-@router.post("/measure_blood_pressure/")
-async def measure_blood_pressure(request: ChannelRequest):
-    sio_connect.emit("subscribe", request.channel)
-    sio_connect.emit("publish", {"channel": f"{request.channel}-cmd", "message": {"type": "command", "vital-sign": "esfigmo"}})
-    try:
-        event1 = sio_connect.receive(timeout=5)
-        event2 = sio_connect.receive(timeout=2)
-    except:
-        return {"error": "Sensor unavailable"}
-    data = {"systolic": 0, "diastolic": 0}
-    if check_errors(event1):
-        return {"error": event1[1]['sensor']}
-    elif check_errors(event2):
-        return {"error": event2[1]['sensor']}
-    for e in [event1, event2]:
-        if e[1]['message']['vs'] == 'sis':
-            data['systolic'] = e[1]['message']['valor']
-        elif e[1]['message']['vs'] == 'dias':
-            data['diastolic'] = e[1]['message']['valor']
-    return data
-
-@router.post("/activate_stethoscope/")
-async def activate_stethoscope(request: ChannelRequest):
-    sio_connect.emit("subscribe", request.channel)
-    sio_connect.emit("publish", {"channel": f"{request.channel}-cmd", "message": {"type": "command", "vital-sign": "mic"}})
-    try:
-        event = sio_connect.receive(timeout=3)
-    except:
-        return {"error": "Sensor unavailable"}
-    if check_errors(event):
-        return {"error": event[1]['sensor']}
-    if "type" in event[1]['message'] and event[1]['message']['type'] == 'alarm' and event[1]['message']['mic'] == "cámara":
-        return {"message": "Stethoscope activated"}
-    return {"error": "Stethoscope not activated"}
-
-@router.post("/deactivate_stethoscope/")
-async def deactivate_stethoscope(request: ChannelRequest):
-    sio_connect.emit("subscribe", request.channel)
-    sio_connect.emit("publish", {"channel": f"{request.channel}-cmd", "message": {"type": "command", "vital-sign": "mic"}})
-    try:
-        event = sio_connect.receive(timeout=2)
-    except:
-        return {"error": "Sensor unavailable"}
-    if check_errors(event):
-        return {"error": event[1]['sensor']}
-    if "type" in event[1]['message'] and event[1]['message']['type'] == 'alarm' and event[1]['message']['mic'] == "cámara":
-        return {"message": "Stethoscope deactivated"}
-    return {"error": "Stethoscope not deactivated"}
-
-@router.post("/record_stethoscope/")
-async def record_stethoscope(request: ChannelRequest):
-    sio_connect.emit("subscribe", request.channel)
-    sio_connect.emit("publish", {"channel": f"{request.channel}-cmd", "message": {"type": "command", "vital-sign": "esteto"}})
-    try:
-        event = sio_connect.receive(timeout=2)
-    except:
-        return {"error": "Sensor unavailable"}
-    if check_errors(event):
-        return {"error": event[1]['sensor']}
-    if "type" in event[1]['message'] and event[1]['message']['type'] == 'alarm' and event[1]['message']['esteto'] == "done":
-        return {"message": "Stethoscope audio recorded"}
-    return {"error": "Stethoscope audio not recorded"}
-
+        case 'record':
+            await sio.emit("publish", {"channel": f"{request.channel}-cmd", "message": {"type": "command", "vital-sign": "esteto"}})
+            try:
+                event = await sio.receive(timeout=2)
+            except:
+                return {"error": "Sensor unavailable"}
+            if check_errors(event):
+                return {"error": event[1]['sensor']}
+            if "type" in event[1]['message'] and event[1]['message']['type'] == 'alarm' and event[1]['message']['esteto'] == "done":
+                return {"message": "Stethoscope audio recorded"}
+            return {"error": "Stethoscope audio not recorded"}
+        
+        case _:
+            return {'error': 'command not recognized'}
 
 app.include_router(router)
 

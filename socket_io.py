@@ -215,6 +215,13 @@ def connect_sio():
 
 connect_sio()
 
+
+@router.post('/test-socket/')
+async def patient_exit(request: ChannelRequest): 
+    sio_client.emit('subscribe', request.channel)
+    sio_client.emit('publish', {"channel": f"{request.channel}", "message": {"message": "The message has been sent"}}) 
+    return {'status': 'success'}
+
 @router.post('/control/')
 def control(request: ChannelRequest): 
     sio_client.emit('subscribe', request.channel)

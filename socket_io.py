@@ -202,9 +202,10 @@ def check_errors(event):
  
 class ChannelRequest(BaseModel):
     channel: str
-    command: str
+    command: str 
 
-
+class ChannelRequest2(BaseModel):
+    channel: str 
 # 
 
 sio_client = socketio.SimpleClient()
@@ -217,7 +218,7 @@ connect_sio()
 
 
 @router.post('/test-socket/')
-async def patient_exit(request: ChannelRequest): 
+async def patient_exit(request: ChannelRequest2): 
     sio_client.emit('subscribe', request.channel)
     sio_client.emit('publish', {"channel": f"{request.channel}", "message": {"message": "The message has been sent"}}) 
     return {'status': 'success'}
